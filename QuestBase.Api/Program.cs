@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -6,6 +7,7 @@ using QuestBase.Api.Data;
 using QuestBase.Api.Domain.Projects;
 using QuestBase.Api.Features.Auth;
 using QuestBase.Api.Modules.Auth;
+using QuestBase.Api.Shared.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,6 +30,8 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
+        options.MapInboundClaims = false;
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -45,7 +49,33 @@ builder.Services.AddAuthorization();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Enter your JWT token only. Do not type the word Bearer."
+    });
+
+    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+            {
+                Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                {
+                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
@@ -76,23 +106,29 @@ app.MapGet("/demo/projects", async (QuestBaseDbContext db) =>
     return Results.Ok(projects);
 });
 
-app.MapPost("/demo/projects", async (
+app.MapPost("/v1/projects", async (
     CreateProjectRequest request,
-    QuestBaseDbContext db) =>
+    QuestBaseDbContext db,
+    ClaimsPrincipal user,
+    CancellationToken ct) =>
 {
+    var ownerUserId = user.GetUserId();
+
     var project = new Project
     {
         Id = Guid.NewGuid(),
+        OwnerUserId = ownerUserId,
         Name = request.Name,
         Slug = request.Name.ToLowerInvariant().Replace(" ", "-"),
         CreatedAt = DateTime.UtcNow
     };
 
     db.Projects.Add(project);
-    await db.SaveChangesAsync();
+    await db.SaveChangesAsync(ct);
 
-    return Results.Created($"/demo/projects/{project.Id}", project);
-});
+    return Results.Created($"/v1/projects/{project.Id}", project);
+})
+.RequireAuthorization();
 
 // Auth endpoints
 app.MapAuthEndpoints();

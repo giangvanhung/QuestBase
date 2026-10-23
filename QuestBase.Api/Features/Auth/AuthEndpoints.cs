@@ -32,10 +32,18 @@ public static class AuthEndpoints
         group.MapGet("/me", (
             System.Security.Claims.ClaimsPrincipal user) =>
         {
+            var userId = user.FindFirst("sub")?.Value;
+            var email = user.FindFirst("email")?.Value;
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Results.Unauthorized();
+            }
+
             return Results.Ok(new
             {
-                userId = user.FindFirst("sub")?.Value,
-                email = user.FindFirst("email")?.Value
+                userId,
+                email
             });
         }).RequireAuthorization();
     }
