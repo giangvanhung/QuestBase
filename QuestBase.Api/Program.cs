@@ -1,20 +1,54 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using QuestBase.Api.Data;
-using QuestBase.Api.Entities;
+using QuestBase.Api.Domain.Projects;
+using QuestBase.Api.Features.Auth;
+using QuestBase.Api.Modules.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Database
 builder.Services.AddDbContext<QuestBaseDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("QuestBase")));
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("QuestBase")));
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// JWT settings
+var jwtSettings = builder.Configuration
+    .GetSection("Jwt")
+    .Get<JwtSettings>()!;
+
+builder.Services.AddSingleton(jwtSettings);
+builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<AuthService>();
+
+// Authentication
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtSettings.Issuer,
+            ValidAudience = jwtSettings.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
+        };
+    });
+
+builder.Services.AddAuthorization();
+
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -23,6 +57,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+// Public endpoint
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "ok",
@@ -30,6 +65,7 @@ app.MapGet("/health", () => Results.Ok(new
     time = DateTime.UtcNow
 }));
 
+// Demo project endpoints
 app.MapGet("/demo/projects", async (QuestBaseDbContext db) =>
 {
     var projects = await db.Projects
@@ -48,7 +84,7 @@ app.MapPost("/demo/projects", async (
     {
         Id = Guid.NewGuid(),
         Name = request.Name,
-        Slug = request.Name.ToLower().Replace(" ", "-"),
+        Slug = request.Name.ToLowerInvariant().Replace(" ", "-"),
         CreatedAt = DateTime.UtcNow
     };
 
@@ -58,30 +94,7 @@ app.MapPost("/demo/projects", async (
     return Results.Created($"/demo/projects/{project.Id}", project);
 });
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
-
+// Auth endpoints
+app.MapAuthEndpoints();
 app.Run();
-
 public record CreateProjectRequest(string Name);
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

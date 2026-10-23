@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("c4591ae8-1420-4ca0-aafc-6d90926b8784")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("QuestBase.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+42e19ec992f4693a97361dfbc55ded0dfef8ea24")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+03afbd661eceb052c8fde3fe6fea4230b675b1e0")]
 [assembly: System.Reflection.AssemblyProductAttribute("QuestBase.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("QuestBase.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
