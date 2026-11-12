@@ -9,6 +9,7 @@ using QuestBase.Api.Features.Auth;
 using QuestBase.Api.Features.Projects;
 using QuestBase.Api.Modules.Auth;
 using QuestBase.Api.Shared.Extensions;
+using QuestBase.Api.Shared.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -81,6 +82,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -98,15 +101,15 @@ app.MapGet("/health", () => Results.Ok(new
 }));
 
 // Demo project endpoints
-app.MapGet("/demo/projects", async (QuestBaseDbContext db) =>
-{
-    var projects = await db.Projects
-        .OrderByDescending(x => x.CreatedAt)
-        .Take(10)
-        .ToListAsync();
+// app.MapGet("/demo/projects", async (QuestBaseDbContext db) =>
+// {
+//     var projects = await db.Projects
+//         .OrderByDescending(x => x.CreatedAt)
+//         .Take(10)
+//         .ToListAsync();
 
-    return Results.Ok(projects);
-});
+//     return Results.Ok(projects);
+// });
 
 app.MapProjectEndpoints();
 // Auth endpoints

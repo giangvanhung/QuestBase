@@ -1,2 +1,2 @@
 namespace QuestBase.Api.Features.Projects;
-public record CreateProjectRequest(string Name);
+public sealed record CreateProjectRequest(string Name);
