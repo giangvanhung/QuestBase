@@ -10,6 +10,8 @@ using QuestBase.Api.Features.Projects;
 using QuestBase.Api.Modules.Auth;
 using QuestBase.Api.Shared.Extensions;
 using QuestBase.Api.Shared.Middleware;
+using Microsoft.AspNetCore.Authentication;
+using QuestBase.Api.Shared.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,9 +48,23 @@ builder.Services
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(jwtSettings.SecretKey))
         };
-    });
+     })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.SchemeName,
+        _ => { });
 
-builder.Services.AddAuthorization();
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("GameClient", policy =>
+    {
+        policy.AddAuthenticationSchemes(
+            ApiKeyAuthenticationHandler.SchemeName);
+
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("project_id");
+    });
+});
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -91,7 +107,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseAuthentication();
+app.UseAuthorization();
 // Public endpoint
 app.MapGet("/health", () => Results.Ok(new
 {
@@ -114,4 +131,14 @@ app.MapGet("/health", () => Results.Ok(new
 app.MapProjectEndpoints();
 // Auth endpoints
 app.MapAuthEndpoints();
+
+app.MapGet("/v1/game/project", (ClaimsPrincipal user) =>
+{
+    return Results.Ok(new
+    {
+        projectId = user.FindFirstValue("project_id")
+    });
+})
+.RequireAuthorization("GameClient");
+
 app.Run();

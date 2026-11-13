@@ -64,4 +64,104 @@ class ProjectService
             pj => pj.Id == projectId && pj.OwnerUserId == ownerUserId,
             ct);
     }
+
+    public async Task<CreateApiKeyResponse?> CreateApiKeyAsync(
+    Guid ownerUserId,
+    Guid projectId,
+    CreateApiKeyRequest request,
+    CancellationToken ct)
+    {
+        var project = await GetByIdAsync(ownerUserId, projectId, ct);
+
+        if (project is null)
+        {
+            return null;
+        }
+
+        var name = request.Name?.Trim();
+
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
+        {
+            throw new ArgumentException(
+                "API key name is required and must not exceed 100 characters.");
+        }
+
+        var rawKey = ApiKeyGenerator.Generate();
+
+        var apiKey = new ApiKey
+        {
+            Id = Guid.NewGuid(),
+            ProjectId = project.Id,
+            Name = name,
+            KeyPrefix = rawKey[..11],
+            KeyHash = ApiKeyGenerator.Hash(rawKey),
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _db.Set<ApiKey>().Add(apiKey);
+        await _db.SaveChangesAsync(ct);
+
+        return new CreateApiKeyResponse(
+            apiKey.Id,
+            apiKey.Name,
+            rawKey,
+            apiKey.KeyPrefix,
+            apiKey.CreatedAt);
+    }
+
+    public async Task<bool> RevokeApiKeyAsync(
+        Guid ownerUserId,
+        Guid projectId,
+        Guid apiKeyId,
+        CancellationToken ct)
+    {
+        var project = await GetByIdAsync(ownerUserId, projectId, ct);
+
+        if (project is null)
+        {
+            return false;
+        }
+
+        var apiKey = await _db.ApiKeys.FirstOrDefaultAsync(
+            x => x.Id == apiKeyId && x.ProjectId == projectId,
+            ct);
+
+        if (apiKey is null)
+        {
+            return false;
+        }
+
+        if (apiKey.RevokedAt is null)
+        {
+            apiKey.RevokedAt = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+        }
+
+        return true;
+    }
+
+    public async Task<List<ApiKeyResponse>?> GetApiKeysAsync(
+        Guid ownerUserId,
+        Guid projectId,
+        CancellationToken ct)
+    {
+        var project = await GetByIdAsync(ownerUserId, projectId, ct);
+
+        if (project is null)
+        {
+            return null;
+        }
+
+        return await _db.ApiKeys
+            .AsNoTracking()
+            .Where(x => x.ProjectId == projectId)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => new ApiKeyResponse(
+                x.Id,
+                x.Name,
+                x.KeyPrefix,
+                x.CreatedAt,
+                x.RevokedAt))
+            .ToListAsync(ct);
+    }
 }

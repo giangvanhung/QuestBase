@@ -41,9 +41,7 @@ public static class ProjectEndpoints
             return TypedResults.Ok(projects);
         });
 
-        group.MapGet("/{projectId:guid}", async Task<Results<
-        NotFound,
-        Ok<Project>>> (
+        group.MapGet("/{projectId:guid}", async Task<Results<NotFound, Ok<Project>>> (
         ProjectService service,
         Guid projectId,
         ClaimsPrincipal user,
@@ -54,5 +52,63 @@ public static class ProjectEndpoints
                 ? TypedResults.NotFound()
                 : TypedResults.Ok(project);
         });
+
+        group.MapPost("/{projectId:guid}/api-keys", async Task<Results<NotFound, Ok<CreateApiKeyResponse>>> (
+        Guid projectId,
+        CreateApiKeyRequest request,
+        ProjectService service,
+        ClaimsPrincipal user,
+        CancellationToken ct) =>
+        {
+            var ownerUserId = user.GetUserId();
+
+            var result = await service.CreateApiKeyAsync(
+                ownerUserId,
+                projectId,
+                request,
+                ct);
+
+            return result is null
+                ? TypedResults.NotFound()
+                : TypedResults.Ok(result);
+        });
+
+        group.MapDelete("/{projectId:guid}/api-keys/{apiKeyId:guid}",
+        async Task<Results<NotFound, NoContent>> (
+            Guid projectId,
+            Guid apiKeyId,
+            ProjectService service,
+            ClaimsPrincipal user,
+            CancellationToken ct) =>
+        {
+            var revoked = await service.RevokeApiKeyAsync(
+                user.GetUserId(),
+                projectId,
+                apiKeyId,
+                ct);
+
+            return revoked
+                ? TypedResults.NoContent()
+                : TypedResults.NotFound();
+        });
+
+
+        group.MapGet("/{projectId:guid}/api-keys",
+            async Task<Results<NotFound, Ok<List<ApiKeyResponse>>>> (
+                Guid projectId,
+                ProjectService service,
+                ClaimsPrincipal user,
+                CancellationToken ct) =>
+            {
+                var apiKeys = await service.GetApiKeysAsync(
+                    user.GetUserId(),
+                    projectId,
+                    ct);
+
+                return apiKeys is null
+                    ? TypedResults.NotFound()
+                    : TypedResults.Ok(apiKeys);
+            });
+
     }
 }
